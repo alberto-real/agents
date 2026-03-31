@@ -1,6 +1,6 @@
 requests
 python-dotenv
-gradio
+gradio>=5.0.0
 pypdf
 openai
 openai-agents

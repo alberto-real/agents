@@ -76,8 +76,9 @@ tools = [{"type": "function", "function": record_user_details_json},
 class Me:
 
     def __init__(self):
-        self.openai = OpenAI()
-        self.name = "Ed Donner"
+        self.openai = OpenAI(api_key=os.getenv('GROQ_API_KEY'), base_url="https://api.groq.com/openai/v1")
+        self.model_name = "openai/gpt-oss-120b"
+        self.name = "Alberto Real"
         reader = PdfReader("me/linkedin.pdf")
         self.linkedin = ""
         for page in reader.pages:
@@ -105,18 +106,34 @@ particularly questions related to {self.name}'s career, background, skills and e
 Your responsibility is to represent {self.name} for interactions on the website as faithfully as possible. \
 You are given a summary of {self.name}'s background and LinkedIn profile which you can use to answer questions. \
 Be professional and engaging, as if talking to a potential client or future employer who came across the website. \
-If you don't know the answer to any question, use your record_unknown_question tool to record the question that you couldn't answer, even if it's about something trivial or unrelated to career. \
-If the user is engaging in discussion, try to steer them towards getting in touch via email; ask for their email and record it using your record_user_details tool. "
+\n\nIMPORTANT: Only answer based on the information provided in the Summary and LinkedIn Profile below. \
+Do NOT invent, assume, or fabricate any information that is not explicitly present in those sources. \
+If a question cannot be answered with the provided information, even partially, you MUST use your record_unknown_question tool to record it. \
+Then, acknowledge the question warmly, explain that you don't have that specific detail available, \
+and pivot the conversation by relating it to something relevant from the provided context or by encouraging the user to get in touch directly for a more personal answer. \
+This applies to all questions, including abstract or opinion-based ones — if the answer is not grounded in the provided context, treat it as unknown. \
+Never give a flat 'I don't know' — always add value by connecting to what you do know from the provided sources. \
+\n\nIf the user is engaging in discussion, try to steer them towards getting in touch via email; ask for their email and record it using your record_user_details tool. "
 
         system_prompt += f"\n\n## Summary:\n{self.summary}\n\n## LinkedIn Profile:\n{self.linkedin}\n\n"
         system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
         return system_prompt
     
     def chat(self, message, history):
+        if history and isinstance(history[0], (list, tuple)):
+            converted = []
+            for user_msg, assistant_msg in history:
+                if user_msg:
+                    converted.append({"role": "user", "content": user_msg})
+                if assistant_msg:
+                    converted.append({"role": "assistant", "content": assistant_msg})
+            history = converted
+        else:
+            history = [{"role": h["role"], "content": h["content"]} for h in history]
         messages = [{"role": "system", "content": self.system_prompt()}] + history + [{"role": "user", "content": message}]
         done = False
         while not done:
-            response = self.openai.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
+            response = self.openai.chat.completions.create(model=self.model_name, messages=messages, tools=tools, temperature=0)
             if response.choices[0].finish_reason=="tool_calls":
                 message = response.choices[0].message
                 tool_calls = message.tool_calls
@@ -130,5 +147,11 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 
 if __name__ == "__main__":
     me = Me()
-    gr.ChatInterface(me.chat, type="messages").launch()
+    gr.ChatInterface(
+        me.chat,
+        title="Alberto Real Estepa",
+        description="Professional virtual assistant | Asistente virtual profesional"
+                    "<br>Ask about my career, skills and experience | Consulta mi trayectoria, habilidades y experiencia"
+                    '<br><a href="https://www.linkedin.com/in/alberto-real/" target="_blank">LinkedIn Profile | Perfil de LinkedIn</a>',
+    ).launch()
     
