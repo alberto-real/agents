@@ -133,7 +133,21 @@ Never give a flat 'I don't know' — always add value by connecting to what you 
         messages = [{"role": "system", "content": self.system_prompt()}] + history + [{"role": "user", "content": message}]
         done = False
         while not done:
-            response = self.openai.chat.completions.create(model=self.model_name, messages=messages, tools=tools, temperature=0)
+            try:
+                response = self.openai.chat.completions.create(model=self.model_name, messages=messages, tools=tools, temperature=0)
+            except Exception as e:
+                error_message = str(e).lower()
+                print(f"Error calling API: {e}")
+                
+                # Check for rate limit reached
+                if "rate_limit" in error_message or "too many requests" in error_message or "429" in error_message:
+                    gr.Warning("Groq API rate limit reached (Free Tier). Please wait a moment.")
+                    return "⚠️ I've reached the free tier rate limit on Groq. Please wait a minute and try again."
+                
+                # Other API errors
+                gr.Error(f"API Error: {str(e)}")
+                return f"❌ Sorry, an error occurred while processing your request: {str(e)}"
+
             if response.choices[0].finish_reason=="tool_calls":
                 message = response.choices[0].message
                 tool_calls = message.tool_calls
